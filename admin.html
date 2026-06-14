@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BodyMetrics — Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#080b14;--bg2:#0d1220;--bg3:#121929;
+  --surface:rgba(255,255,255,0.04);--surface2:rgba(255,255,255,0.07);
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --accent:#f59e0b;--accent2:#fbbf24;--purple:#7c6fff;
+  --cyan:#22d3ee;--green:#34d399;--red:#f87171;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --radius:16px;--radius-sm:10px;
+  --glow:0 0 40px rgba(245,158,11,0.12);
+  --transition:all 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;min-height:100vh;overflow-x:hidden;}
+canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+
+/* ── AUTH / ACCESS DENIED ── */
+#gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:var(--bg);}
+.gate-card{
+  width:min(420px,92vw);background:rgba(13,18,32,0.95);
+  border:1px solid var(--border2);border-radius:24px;padding:48px 40px;
+  backdrop-filter:blur(24px);box-shadow:var(--glow),0 40px 80px rgba(0,0,0,0.5);
+  animation:slideUp 0.6s ease;text-align:center;
+}
+.gate-icon{font-size:48px;margin-bottom:20px;}
+.gate-title{font-size:22px;font-weight:700;margin-bottom:10px;}
+.gate-sub{color:var(--text2);font-size:14px;margin-bottom:28px;line-height:1.7;}
+.field-label{display:block;font-size:11px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-bottom:8px;text-align:left;}
+.field-input{
+  width:100%;padding:13px 15px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:15px;
+  transition:var(--transition);outline:none;margin-bottom:14px;
+}
+.field-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(245,158,11,0.12);}
+.btn-primary{
+  width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),#d97706);
+  border:none;border-radius:var(--radius-sm);color:#000;
+  font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;
+  cursor:pointer;transition:var(--transition);
+  box-shadow:0 8px 24px rgba(245,158,11,0.3);
+}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(245,158,11,0.45);}
+.auth-msg{font-size:13px;color:var(--red);margin-top:12px;min-height:20px;}
+
+/* ── ADMIN APP ── */
+#admin-app{display:none;position:relative;z-index:1;min-height:100vh;}
+
+/* ── TOPBAR ── */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:rgba(8,11,20,0.92);border-bottom:1px solid var(--border);
+  backdrop-filter:blur(20px);padding:14px 32px;
+  display:flex;align-items:center;gap:16px;
+}
+.topbar-logo{
+  font-family:'Space Mono',monospace;font-size:11px;
+  letter-spacing:3px;color:var(--accent2);text-transform:uppercase;
+  display:flex;align-items:center;gap:8px;
+}
+.admin-badge{
+  padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;
+  letter-spacing:1.5px;text-transform:uppercase;
+  background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);
+  color:var(--accent2);font-family:'Space Mono',monospace;
+}
+.topbar-spacer{flex:1;}
+.topbar-user{display:flex;align-items:center;gap:10px;color:var(--text2);font-size:13px;}
+.btn-logout{
+  background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);
+  color:var(--red);padding:7px 14px;border-radius:var(--radius-sm);
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:600;
+  cursor:pointer;transition:var(--transition);
+}
+.btn-logout:hover{background:rgba(248,113,113,0.2);}
+
+/* ── MAIN ── */
+.main{padding:36px 32px;max-width:1200px;margin:0 auto;}
+.page-eyebrow{font-size:11px;letter-spacing:3px;color:var(--accent2);text-transform:uppercase;font-family:'Space Mono',monospace;margin-bottom:10px;}
+.page-title{font-size:32px;font-weight:700;margin-bottom:32px;}
+.page-title span{background:linear-gradient(135deg,var(--accent2),#fb923c);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+
+/* ── USER SELECTOR ── */
+.user-selector-card{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:24px;margin-bottom:28px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.user-selector-label{font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap;}
+.user-select{
+  flex:1;min-width:200px;max-width:360px;padding:12px 14px;
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius-sm);color:var(--text);
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  outline:none;transition:var(--transition);
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;
+}
+.user-select:focus{border-color:var(--accent);}
+.user-meta{display:flex;gap:10px;flex-wrap:wrap;}
+.meta-pill{
+  padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;
+  font-family:'Space Mono',monospace;letter-spacing:1px;
+}
+.meta-pill-email{background:rgba(34,211,238,0.08);color:var(--cyan);border:1px solid rgba(34,211,238,0.2);}
+.meta-pill-joined{background:rgba(52,211,153,0.08);color:var(--green);border:1px solid rgba(52,211,153,0.2);}
+
+/* ── STATS ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:28px;}
+.stat-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:20px;
+  transition:var(--transition);
+}
+.stat-card:hover{border-color:var(--border2);transform:translateY(-2px);}
+.stat-label{font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;}
+.stat-value{font-family:'Space Mono',monospace;font-size:28px;font-weight:700;}
+.stat-unit{font-size:13px;color:var(--text2);margin-left:4px;font-family:'Space Grotesk',sans-serif;}
+
+/* ── TAB PANELS ── */
+.tabs{display:flex;gap:4px;background:var(--surface);border-radius:var(--radius-sm);padding:4px;margin-bottom:24px;width:fit-content;}
+.tab{
+  padding:10px 20px;border:none;background:transparent;
+  color:var(--text2);font-family:'Space Grotesk',sans-serif;
+  font-size:13px;font-weight:500;border-radius:8px;cursor:pointer;
+  transition:var(--transition);
+}
+.tab.active{background:linear-gradient(135deg,var(--accent),#d97706);color:#000;font-weight:700;}
+
+/* ── TABLE ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:24px;}
+.card-title{font-size:15px;font-weight:600;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;}
+td{padding:13px 14px;border-bottom:1px solid var(--border);font-size:14px;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--surface2);}
+.weight-pill{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--accent2);}
+.delta-up{color:var(--red);}
+.delta-down{color:var(--green);}
+.delta-same{color:var(--text3);}
+
+/* ── ALL USERS TABLE ── */
+.users-grid{display:grid;gap:12px;}
+.user-row{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:16px 20px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  cursor:pointer;transition:var(--transition);
+}
+.user-row:hover{border-color:var(--border2);background:var(--surface2);}
+.user-avatar{
+  width:42px;height:42px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,var(--purple),var(--cyan));
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:16px;color:#fff;
+}
+.user-info{flex:1;}
+.user-name{font-weight:600;font-size:15px;}
+.user-email{font-size:12px;color:var(--text3);margin-top:2px;}
+.user-stats{display:flex;gap:16px;flex-wrap:wrap;}
+.user-stat{text-align:center;}
+.user-stat-val{font-family:'Space Mono',monospace;font-weight:700;font-size:16px;}
+.user-stat-lbl{font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-top:2px;}
+
+/* ── CHART ── */
+#admin-chart{width:100%;height:180px;}
+
+/* ── EMPTY / LOADER ── */
+.empty{text-align:center;padding:48px;color:var(--text3);}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:0.5;}
+.loader{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:48px auto;}
+
+/* ── TOAST ── */
+#toast-c{position:fixed;bottom:28px;right:28px;z-index:999;display:flex;flex-direction:column;gap:8px;}
+.toast{padding:12px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;animation:toastIn 0.3s ease;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
+.toast-success{background:#064e3b;border:1px solid rgba(52,211,153,0.3);color:var(--green);}
+.toast-error{background:#450a0a;border:1px solid rgba(248,113,113,0.3);color:var(--red);}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes toastIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:translateX(0);}}
+@keyframes drawLine{from{stroke-dashoffset:1000;}to{stroke-dashoffset:0;}}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="toast-c"></div>
+
+<!-- ════════ AUTH GATE ════════ -->
+<div id="gate">
+  <div class="gate-card" id="gate-login">
+    <div class="gate-icon">🔐</div>
+    <h2 class="gate-title">Admin Access</h2>
+    <p class="gate-sub">This panel is restricted to administrators only.<br/>Sign in with your admin account to continue.</p>
+    <label class="field-label">Email</label>
+    <input class="field-input" id="g-email" type="email" placeholder="admin@example.com"/>
+    <label class="field-label">Password</label>
+    <input class="field-input" id="g-pass" type="password" placeholder="••••••••"/>
+    <button class="btn-primary" onclick="doLogin()">Access Admin Panel →</button>
+    <div class="auth-msg" id="g-msg"></div>
+  </div>
+  <div class="gate-card" id="gate-denied" style="display:none;">
+    <div class="gate-icon">🚫</div>
+    <h2 class="gate-title">Access Denied</h2>
+    <p class="gate-sub">Your account does not have admin privileges.<br/>Contact the administrator if you believe this is an error.</p>
+    <button class="btn-primary" onclick="doLogout()" style="background:linear-gradient(135deg,#475569,#334155);color:#fff;">← Go Back</button>
+  </div>
+</div>
+
+<!-- ════════ ADMIN APP ════════ -->
+<div id="admin-app">
+  <div class="topbar">
+    <div class="topbar-logo">⚡ BodyMetrics</div>
+    <div class="admin-badge">Admin Panel</div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-user" id="topbar-user">—</div>
+    <button class="btn-logout" onclick="doLogout()">Sign Out</button>
+  </div>
+
+  <div class="main">
+    <div class="page-eyebrow">Administrator View</div>
+    <h1 class="page-title">User <span>Overview</span></h1>
+
+    <!-- ALL USERS -->
+    <div class="card">
+      <div class="card-title">👥 All Registered Users <span id="user-count-badge" style="font-size:12px;color:var(--text3);font-weight:400;"></span></div>
+      <div id="all-users-list"><div class="loader"></div></div>
+    </div>
+
+    <!-- SELECTED USER DETAIL -->
+    <div id="user-detail-section" style="display:none;animation:fadeIn 0.4s ease;">
+      <div class="user-selector-card">
+        <div class="user-selector-label">👤 Viewing:</div>
+        <select class="user-select" id="user-select" onchange="selectUser(this.value)"></select>
+        <div class="user-meta" id="selected-user-meta"></div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-row" id="detail-stats"></div>
+
+      <!-- CHART -->
+      <div class="card">
+        <div class="card-title">📈 Weight Trend</div>
+        <svg id="admin-chart" viewBox="0 0 800 180" preserveAspectRatio="none"></svg>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('weight',this)">⚖️ Weight Logs</button>
+        <button class="tab" onclick="switchTab('measurements',this)">📏 Measurements</button>
+        <button class="tab" onclick="switchTab('fields',this)">⚙️ Fields</button>
+      </div>
+
+      <div id="tab-weight"><div class="loader"></div></div>
+      <div id="tab-measurements" style="display:none;"></div>
+      <div id="tab-fields" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG — Uses secret key to bypass RLS
+// ══════════════════════════════════════════════
+const SUPABASE_URL = 'https://eudnfifssahxptbndthv.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_UTI7UAh4AJthcfez9ORcCQ_w0dAg0qJ';
+const SUPABASE_SECRET = 'sb_secret_m8-dGkWFbC14DzmFXZS0HQ_-6nqPe0l';
+
+const { createClient } = supabase;
+// Anon client for auth
+const sbAuth = createClient(SUPABASE_URL, SUPABASE_ANON);
+// Admin client with secret key (bypasses RLS)
+const sbAdmin = createClient(SUPABASE_URL, SUPABASE_SECRET);
+
+let adminUser = null;
+let allUsers = [];
+let selectedUserId = null;
+
+// ══════════════════════════════════════════════
+// CANVAS
+// ══════════════════════════════════════════════
+(function(){
+  const c=document.getElementById('bg-canvas');
+  const ctx=c.getContext('2d');
+  let W,H,pts=[];
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+  resize();window.addEventListener('resize',resize);
+  for(let i=0;i<60;i++)pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25,o:Math.random()*.3+.1,r:Math.random()*1.2+.3});
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    pts.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(245,158,11,${p.o})`;ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }draw();
+})();
+
+// ══════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════
+function toast(msg,type='success'){
+  const c=document.getElementById('toast-c');
+  const t=document.createElement('div');
+  t.className=`toast toast-${type}`;
+  t.innerHTML=`<span>${type==='success'?'✓':'✕'}</span><span>${msg}</span>`;
+  c.appendChild(t);setTimeout(()=>t.remove(),3000);
+}
+
+// ══════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════
+async function doLogin(){
+  const email=document.getElementById('g-email').value.trim();
+  const pass=document.getElementById('g-pass').value;
+  const msg=document.getElementById('g-msg');
+  if(!email||!pass){msg.textContent='Please fill in all fields.';return;}
+  msg.textContent='';
+  const {data,error}=await sbAuth.auth.signInWithPassword({email,password:pass});
+  if(error){msg.textContent=error.message;return;}
+  adminUser=data.user;
+  // Check admin flag
+  const {data:profile}=await sbAdmin.from('profiles').select('*').eq('id',adminUser.id).single();
+  if(!profile?.is_admin){
+    await sbAuth.auth.signOut();
+    document.getElementById('gate-login').style.display='none';
+    document.getElementById('gate-denied').style.display='block';
+    return;
+  }
+  // Granted
+  document.getElementById('gate').style.display='none';
+  document.getElementById('admin-app').style.display='block';
+  document.getElementById('topbar-user').textContent=profile.full_name||email;
+  loadAllUsers();
+}
+
+async function doLogout(){
+  await sbAuth.auth.signOut();
+  location.reload();
+}
+
+// ══════════════════════════════════════════════
+// LOAD ALL USERS
+// ══════════════════════════════════════════════
+async function loadAllUsers(){
+  const {data:profiles}=await sbAdmin.from('profiles').select('*').order('created_at');
+  if(!profiles){return;}
+  allUsers=profiles;
+  document.getElementById('user-count-badge').textContent=`— ${profiles.length} user${profiles.length!==1?'s':''}`;
+
+  // Build user select
+  const sel=document.getElementById('user-select');
+  sel.innerHTML=profiles.map(p=>`<option value="${p.id}">${p.full_name||'—'} (${p.id.slice(0,8)}...)</option>`).join('');
+
+  // For each user, fetch count
+  const {data:wCounts}=await sbAdmin.from('weight_logs').select('user_id');
+  const countMap={};
+  (wCounts||[]).forEach(r=>{countMap[r.user_id]=(countMap[r.user_id]||0)+1;});
+
+  // Build user cards
+  const listEl=document.getElementById('all-users-list');
+  listEl.innerHTML=`<div class="users-grid">
+    ${profiles.map(p=>`
+      <div class="user-row" onclick="selectUser('${p.id}')">
+        <div class="user-avatar">${(p.full_name||'?')[0].toUpperCase()}</div>
+        <div class="user-info">
+          <div class="user-name">${escHtml(p.full_name||'—')}</div>
+          <div class="user-email">${escHtml(p.id)}</div>
+        </div>
+        <div class="user-stats">
+          <div class="user-stat">
+            <div class="user-stat-val">${countMap[p.id]||0}</div>
+            <div class="user-stat-lbl">Weight Logs</div>
+          </div>
+          <div class="user-stat">
+            <div class="user-stat-val" style="font-size:11px;color:var(--text3);">${new Date(p.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+            <div class="user-stat-lbl">Joined</div>
+          </div>
+        </div>
+        ${p.is_admin?'<span style="padding:3px 10px;border-radius:20px;font-size:10px;background:rgba(245,158,11,0.15);color:var(--accent2);border:1px solid rgba(245,158,11,0.3);">ADMIN</span>':''}
+      </div>
+    `).join('')}
+  </div>`;
+
+  // Auto-select first non-admin user
+  const first=profiles.find(p=>!p.is_admin)||profiles[0];
+  if(first)selectUser(first.id);
+}
+
+// ══════════════════════════════════════════════
+// SELECT USER
+// ══════════════════════════════════════════════
+async function selectUser(uid){
+  selectedUserId=uid;
+  document.getElementById('user-select').value=uid;
+  document.getElementById('user-detail-section').style.display='block';
+  const profile=allUsers.find(p=>p.id===uid);
+
+  // Meta pills
+  document.getElementById('selected-user-meta').innerHTML=`
+    <span class="meta-pill meta-pill-email">${profile?.full_name||'Unknown'}</span>
+    <span class="meta-pill meta-pill-joined">Joined ${new Date(profile?.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+  `;
+
+  // Load data
+  const [{data:wlogs},{data:mlogs},{data:fields}]=await Promise.all([
+    sbAdmin.from('weight_logs').select('*').eq('user_id',uid).order('date',{ascending:true}),
+    sbAdmin.from('measurement_logs').select('*,measurement_fields(field_name,unit)').eq('user_id',uid).order('date',{ascending:false}),
+    sbAdmin.from('measurement_fields').select('*').eq('user_id',uid).order('display_order')
+  ]);
+
+  renderDetailStats(wlogs||[],mlogs||[],fields||[]);
+  renderAdminChart(wlogs||[]);
+  renderWeightTab(wlogs||[]);
+  renderMeasurementsTab(mlogs||[],fields||[]);
+  renderFieldsTab(fields||[]);
+  switchTab('weight',document.querySelector('.tab'));
+}
+
+// ══════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════
+function renderDetailStats(wlogs,mlogs,fields){
+  const latest=wlogs[wlogs.length-1];
+  const first=wlogs[0];
+  const totalChange=wlogs.length>=2?(latest.weight_kg-first.weight_kg).toFixed(1):null;
+  document.getElementById('detail-stats').innerHTML=`
+    <div class="stat-card">
+      <div class="stat-label">Latest Weight</div>
+      <div class="stat-value">${latest?latest.weight_kg:'—'}<span class="stat-unit">${latest?'kg':''}</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Weight Logs</div>
+      <div class="stat-value">${wlogs.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Change</div>
+      <div class="stat-value ${totalChange>0?'delta-up':totalChange<0?'delta-down':''}">${totalChange!==null?(totalChange>0?'+':'')+totalChange:'—'}<span class="stat-unit">${totalChange!==null?'kg':''}</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Custom Fields</div>
+      <div class="stat-value">${fields.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Measurement Entries</div>
+      <div class="stat-value">${mlogs.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Tracking Since</div>
+      <div class="stat-value" style="font-size:16px;padding-top:6px;">${first?new Date(first.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'—'}</div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// CHART
+// ══════════════════════════════════════════════
+function renderAdminChart(data){
+  const svg=document.getElementById('admin-chart');
+  if(data.length<2){svg.innerHTML=`<text x="400" y="90" text-anchor="middle" fill="#475569" font-size="14" font-family="Space Grotesk">Not enough data to render chart</text>`;return;}
+  const W=800,H=180,pad={t:16,r:16,b:28,l:46};
+  const weights=data.map(l=>l.weight_kg);
+  const minW=Math.min(...weights)-1,maxW=Math.max(...weights)+1;
+  const xS=i=>pad.l+(i/(data.length-1))*(W-pad.l-pad.r);
+  const yS=w=>pad.t+(1-(w-minW)/(maxW-minW))*(H-pad.t-pad.b);
+  let grid='';
+  for(let i=0;i<=3;i++){
+    const y=pad.t+i*(H-pad.t-pad.b)/3;
+    const val=(maxW-(i/3)*(maxW-minW)).toFixed(1);
+    grid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
+    grid+=`<text x="${pad.l-6}" y="${y+4}" text-anchor="end" fill="#475569" font-size="10" font-family="Space Mono">${val}</text>`;
+  }
+  const pts=data.map((l,i)=>`${xS(i)},${yS(l.weight_kg)}`);
+  const step=Math.max(1,Math.floor(data.length/5));
+  let labels='';
+  data.forEach((l,i)=>{
+    if(i%step===0||i===data.length-1){
+      const d=new Date(l.date);
+      labels+=`<text x="${xS(i)}" y="${H-6}" text-anchor="middle" fill="#475569" font-size="10" font-family="Space Grotesk">${d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</text>`;
+    }
+  });
+  const dots=data.map((l,i)=>`<circle cx="${xS(i)}" cy="${yS(l.weight_kg)}" r="3" fill="#fbbf24" opacity="0.9"/>`).join('');
+  svg.innerHTML=`
+    <defs>
+      <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.02"/>
+      </linearGradient>
+      <linearGradient id="lg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#f59e0b"/>
+        <stop offset="100%" stop-color="#fb923c"/>
+      </linearGradient>
+    </defs>
+    ${grid}
+    <path d="M${xS(0)},${H-pad.b}L${pts.join('L')}L${xS(data.length-1)},${H-pad.b}Z" fill="url(#ag)"/>
+    <path d="M${pts.join('L')}" fill="none" stroke="url(#lg)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1000" stroke-dashoffset="1000" style="animation:drawLine 1s ease forwards;"/>
+    ${dots}${labels}
+  `;
+}
+
+// ══════════════════════════════════════════════
+// WEIGHT TAB
+// ══════════════════════════════════════════════
+function renderWeightTab(data){
+  const el=document.getElementById('tab-weight');
+  const sorted=[...data].reverse();
+  if(!sorted.length){el.innerHTML=`<div class="card"><div class="empty"><div class="empty-icon">⚖️</div><div>No weight logs yet</div></div></div>`;return;}
+  el.innerHTML=`<div class="card"><div class="card-title">⚖️ Weight Log (${sorted.length} entries)</div>
+    <div style="overflow-x:auto;"><table>
+      <thead><tr><th>Date</th><th>Weight</th><th>Change</th><th>Notes</th></tr></thead>
+      <tbody>
+        ${sorted.map((r,i)=>{
+          const prev=sorted[i+1];
+          let delta='';
+          if(prev){const d=(r.weight_kg-prev.weight_kg).toFixed(1);const cls=d>0?'delta-up':d<0?'delta-down':'delta-same';delta=`<span class="${cls}">${d>0?'+':''}${d} kg</span>`;}
+          return `<tr style="animation:fadeIn 0.3s ease ${i*0.02}s both;">
+            <td>${new Date(r.date).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</td>
+            <td><span class="weight-pill">${r.weight_kg} kg</span></td>
+            <td>${delta}</td>
+            <td style="color:var(--text2);font-size:13px;">${escHtml(r.notes||'')}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div></div>`;
+}
+
+// ══════════════════════════════════════════════
+// MEASUREMENTS TAB
+// ══════════════════════════════════════════════
+function renderMeasurementsTab(mlogs,fields){
+  const el=document.getElementById('tab-measurements');
+  if(!mlogs.length){el.innerHTML=`<div class="card"><div class="empty"><div class="empty-icon">📏</div><div>No measurements logged yet</div></div></div>`;return;}
+  // Group by field
+  const byField={};
+  mlogs.forEach(m=>{
+    const fname=m.measurement_fields?.field_name||m.field_id;
+    if(!byField[fname])byField[fname]={unit:m.measurement_fields?.unit||'',logs:[]};
+    byField[fname].logs.push(m);
+  });
+  el.innerHTML=Object.entries(byField).map(([fname,{unit,logs}])=>`
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">📏 ${escHtml(fname)} <span style="font-size:11px;color:var(--text3);font-weight:400;font-family:'Space Mono';">${unit}</span></div>
+      <div style="overflow-x:auto;"><table>
+        <thead><tr><th>Date</th><th>Value</th><th>Change</th></tr></thead>
+        <tbody>
+          ${logs.map((r,i)=>{
+            const prev=logs[i+1];
+            let delta='';
+            if(prev){const d=(r.value-prev.value).toFixed(1);const cls=d>0?'delta-up':d<0?'delta-down':'delta-same';delta=`<span class="${cls}">${d>0?'+':''}${d} ${unit}</span>`;}
+            return `<tr><td>${new Date(r.date).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}</td><td><span class="weight-pill">${r.value} ${unit}</span></td><td>${delta}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════
+// FIELDS TAB
+// ══════════════════════════════════════════════
+function renderFieldsTab(fields){
+  const el=document.getElementById('tab-fields');
+  if(!fields.length){el.innerHTML=`<div class="card"><div class="empty"><div class="empty-icon">⚙️</div><div>No custom fields created by this user</div></div></div>`;return;}
+  el.innerHTML=`<div class="card"><div class="card-title">⚙️ User's Custom Measurement Fields</div>
+    <table>
+      <thead><tr><th>#</th><th>Field Name</th><th>Unit</th><th>Created</th></tr></thead>
+      <tbody>
+        ${fields.map((f,i)=>`
+          <tr>
+            <td style="color:var(--text3);font-family:'Space Mono';font-size:12px;">${i+1}</td>
+            <td style="font-weight:600;">${escHtml(f.field_name)}</td>
+            <td><span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;font-family:'Space Mono';background:${f.unit==='cm'?'rgba(34,211,238,0.1)':'rgba(251,191,36,0.1)'};color:${f.unit==='cm'?'#22d3ee':'#fbbf24'};border:1px solid ${f.unit==='cm'?'rgba(34,211,238,0.2)':'rgba(251,191,36,0.2)'};">${f.unit}</span></td>
+            <td style="font-size:12px;color:var(--text3);">${new Date(f.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+// ══════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════
+function switchTab(name,btn){
+  ['weight','measurements','fields'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display=t===name?'block':'none';
+  });
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function escHtml(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+document.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+</script>
+</body>
+</html>
