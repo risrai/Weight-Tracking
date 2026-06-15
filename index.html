@@ -827,24 +827,34 @@ sb.auth.onAuthStateChange(async(event,session)=>{
 
 async function loadProfile(){
   try{
-    const {data,error}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
-    console.log('[Profile] fetch result:', data, error);
-    if(error || !data){
-      // Trigger may have not fired — create profile manually
-      console.warn('[Profile] Not found, inserting manually...');
-      await sb.from('profiles').upsert({
+    console.log('[Profile] Fetching profile for', currentUser.id);
+    const {data,error}=await sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();
+    console.log('[Profile] Result:', data, 'Error:', error);
+    if(!data){
+      console.warn('[Profile] No profile found — creating one now...');
+      const insertPayload={
         id:currentUser.id,
         full_name:currentUser.user_metadata?.full_name || currentUser.email.split('@')[0]
-      });
-      const {data:retry}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
-      userProfile=retry;
+      };
+      console.log('[Profile] Inserting:', insertPayload);
+      const {error:ie}=await sb.from('profiles').insert(insertPayload);
+      console.log('[Profile] Insert error:', ie);
+      const {data:retry,error:re}=await sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();
+      console.log('[Profile] Retry result:', retry, re);
+      userProfile=retry || insertPayload;
     } else {
       userProfile=data;
     }
   }catch(e){
-    console.error('[Profile] Error:', e);
-    userProfile={id:currentUser.id, full_name:currentUser.email.split('@')[0], is_admin:false};
+    console.error('[Profile] Exception:', e);
+    // Fallback — build a minimal profile so app can still load
+    userProfile={
+      id:currentUser.id,
+      full_name:currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
+      is_admin:false
+    };
   }
+  console.log('[Profile] Final userProfile:', userProfile);
 }
 
 function initApp(){
