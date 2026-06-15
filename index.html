@@ -826,33 +826,22 @@ sb.auth.onAuthStateChange(async(event,session)=>{
 })();
 
 async function loadProfile(){
+  // Race the DB call against a 4s timeout so RLS stalls never freeze the app
+  const fallback={
+    id:currentUser.id,
+    full_name:currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
+    is_admin:false
+  };
   try{
-    console.log('[Profile] Fetching profile for', currentUser.id);
-    const {data,error}=await sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();
+    console.log('[Profile] Fetching...');
+    const dbCall=sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();
+    const timeout=new Promise(res=>setTimeout(()=>res({data:null,error:'timeout'}),4000));
+    const {data,error}=await Promise.race([dbCall,timeout]);
     console.log('[Profile] Result:', data, 'Error:', error);
-    if(!data){
-      console.warn('[Profile] No profile found — creating one now...');
-      const insertPayload={
-        id:currentUser.id,
-        full_name:currentUser.user_metadata?.full_name || currentUser.email.split('@')[0]
-      };
-      console.log('[Profile] Inserting:', insertPayload);
-      const {error:ie}=await sb.from('profiles').insert(insertPayload);
-      console.log('[Profile] Insert error:', ie);
-      const {data:retry,error:re}=await sb.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();
-      console.log('[Profile] Retry result:', retry, re);
-      userProfile=retry || insertPayload;
-    } else {
-      userProfile=data;
-    }
+    userProfile = data || fallback;
   }catch(e){
     console.error('[Profile] Exception:', e);
-    // Fallback — build a minimal profile so app can still load
-    userProfile={
-      id:currentUser.id,
-      full_name:currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
-      is_admin:false
-    };
+    userProfile = fallback;
   }
   console.log('[Profile] Final userProfile:', userProfile);
 }
