@@ -748,19 +748,31 @@ async function handleAuth(){
   if(!email||!pass){msg.textContent='Please fill in all fields.';return;}
   btn.textContent='Signing in…';btn.disabled=true;
   msg.textContent='';
-  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
-  if(error){
-    msg.textContent=error.message;
-    btn.classList.add('shake');
-    setTimeout(()=>btn.classList.remove('shake'),400);
-    btn.textContent='Sign In →';btn.disabled=false;
-    return;
-  }
-  // Directly boot the app — don't wait for onAuthStateChange
-  if(data?.user){
+  try{
+    console.log('[Auth] Attempting sign in...');
+    const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+    console.log('[Auth] Response data:', data, 'error:', error);
+    if(error){
+      msg.textContent=error.message;
+      btn.classList.add('shake');
+      setTimeout(()=>btn.classList.remove('shake'),400);
+      btn.textContent='Sign In →';btn.disabled=false;
+      return;
+    }
+    if(!data?.user){
+      msg.textContent='No user returned — please try again.';
+      btn.textContent='Sign In →';btn.disabled=false;
+      return;
+    }
+    console.log('[Auth] Got user:', data.user.id);
     currentUser=data.user;
     await loadProfile();
+    console.log('[Auth] Profile loaded:', userProfile);
     initApp();
+  }catch(e){
+    console.error('[Auth] Crash:', e);
+    msg.textContent='Error: '+e.message;
+    btn.textContent='Sign In →';btn.disabled=false;
   }
 }
 
@@ -814,8 +826,25 @@ sb.auth.onAuthStateChange(async(event,session)=>{
 })();
 
 async function loadProfile(){
-  const {data}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
-  userProfile=data;
+  try{
+    const {data,error}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
+    console.log('[Profile] fetch result:', data, error);
+    if(error || !data){
+      // Trigger may have not fired — create profile manually
+      console.warn('[Profile] Not found, inserting manually...');
+      await sb.from('profiles').upsert({
+        id:currentUser.id,
+        full_name:currentUser.user_metadata?.full_name || currentUser.email.split('@')[0]
+      });
+      const {data:retry}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
+      userProfile=retry;
+    } else {
+      userProfile=data;
+    }
+  }catch(e){
+    console.error('[Profile] Error:', e);
+    userProfile={id:currentUser.id, full_name:currentUser.email.split('@')[0], is_admin:false};
+  }
 }
 
 function initApp(){
